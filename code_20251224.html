@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <title>圣诞快乐</title>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+    <style>
+        body { margin: 0; padding: 0; background: #000; }
+        h1 { position: absolute; top: 15px; width: 100%; text-align: center; color: #ff99cc; font-size: 20px; font-family: sans-serif; }
+        canvas { display: block; }
+    </style>
+</head>
+<body>
+    <h1>Merry Christmas 🎄</h1>
+    <script>
+        // 基础初始化
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 100);
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        document.body.appendChild(renderer.domElement);
+
+        // 圣诞树粒子生成（五层圆锥堆叠）
+        const treeParticles = 6000;
+        const treeGeometry = new THREE.BufferGeometry();
+        const treePosArray = new Float32Array(treeParticles * 3);
+        const treeColorArray = new Float32Array(treeParticles * 3);
+
+        // 五层圆锥的参数：[底半径, 层高度, 起始高度]
+        const coneLayers = [
+            { radius: 2.2, height: 1.0, startY: 0.0 }, 
+            { radius: 1.8, height: 0.9, startY: 0.8 }, 
+            { radius: 1.4, height: 0.8, startY: 1.5 }, 
+            { radius: 1.0, height: 0.7, startY: 2.1 }, 
+            { radius: 0.6, height: 0.6, startY: 2.6 }  
+        ];
+
+        // 记录原始颜色，用于彩灯闪烁后还原
+        const originalColors = [];
+        let particleIndex = 0;
+        coneLayers.forEach(layer => {
+            const layerParticleCount = Math.floor(treeParticles / coneLayers.length);
+            for (let i = 0; i < layerParticleCount && particleIndex < treeParticles; i++) {
+                const relHeight = Math.random() * layer.height;
+                const currentRadius = layer.radius * (1 - relHeight / layer.height);
+                const angle = Math.random() * Math.PI * 2;
+
+                const absoluteY = layer.startY + relHeight - 1.6;
+                treePosArray[particleIndex * 3] = currentRadius * Math.cos(angle);
+                treePosArray[particleIndex * 3 + 1] = absoluteY;
+                treePosArray[particleIndex * 3 + 2] = currentRadius * Math.sin(angle);
+
+                const colorRatio = relHeight / layer.height;
+                const layerColor = [
+                    [0.9, 0.1, 0.3], 
+                    [1.0, 0.2, 0.4], 
+                    [1.0, 0.3, 0.5], 
+                    [1.0, 0.4, 0.6], 
+                    [1.0, 0.5, 0.7]  
+                ][coneLayers.indexOf(layer)];
+                const r = layerColor[0];
+                const g = layerColor[1] + colorRatio * 0.2;
+                const b = layerColor[2] + colorRatio * 0.2;
+                treeColorArray[particleIndex * 3] = r;
+                treeColorArray[particleIndex * 3 + 1] = g;
+                treeColorArray[particleIndex * 3 + 2] = b;
+                originalColors.push([r, g, b]);
+
+                particleIndex++;
+            }
+        });
+
+        treeGeometry.setAttribute('position', new THREE.BufferAttribute(treePosArray, 3));
+        treeGeometry.setAttribute('color', new THREE.BufferAttribute(treeColorArray, 3));
+
+        // 圣诞树粒子材质
+        const treeMaterial = new THREE.PointsMaterial({
+            size: 0.04,
+            vertexColors: true,
+            transparent: true,
+            opacity: 0.95,
+            sizeAttenuation: true,
+            blending: THREE.AdditiveBlending
+        });
+
+        const tree = new THREE.Points(treeGeometry, treeMaterial);
+        scene.add(tree);
+
+        // 顶部星星
+        const starGeo = new THREE.SphereGeometry(0.22, 16, 16);
+        const starMat = new THREE.MeshBasicMaterial({ color: 0xffff00 });
+        const star = new THREE.Mesh(starGeo, starMat);
+        star.position.y = coneLayers[4].startY + coneLayers[4].height - 1.6;
+        scene.add(star);
+
+        // 雪花粒子生成
+        const snowCount = 800; 
+        const snowGeometry = new THREE.BufferGeometry();
+        const snowPosArray = new Float32Array(snowCount * 3);
+        const snowVelArray = new Float32Array(snowCount * 3); 
+
+        for (let i = 0; i < snowCount * 3; i += 3) {
+            snowPosArray[i] = (Math.random() - 0.5) * 15; 
+            snowPosArray[i + 1] = Math.random() * 8 + 2; 
+            snowPosArray[i + 2] = (Math.random() - 0.5) * 15; 
+
+            snowVelArray[i] = (Math.random() - 0.5) * 0.01; 
+            snowVelArray[i + 1] = -Math.random() * 0.02 - 0.01; 
+            snowVelArray[i + 2] = (Math.random() - 0.5) * 0.01; 
+        }
+
+        snowGeometry.setAttribute('position', new THREE.BufferAttribute(snowPosArray, 3));
+        snowGeometry.setAttribute('velocity', new THREE.BufferAttribute(snowVelArray, 3));
+
+        const snowMaterial = new THREE.PointsMaterial({
+            size: 0.1,
+            color: 0xffffff,
+            transparent: true,
+            opacity: 0.7,
+            sizeAttenuation: true
+        });
+
+        const snow = new THREE.Points(snowGeometry, snowMaterial);
+        scene.add(snow);
+
+        // ========== 彩灯闪烁核心逻辑 ==========
+        const lightCount = 300; // 彩灯数量
+        const lightColors = [[1,0,0], [1,1,0], [0,1,0], [0,1,1], [0,0,1], [1,0,1]]; // 红、黄、绿、青、蓝、紫
+        let currentLights = []; // 存储当前闪烁的彩灯粒子索引
+
+        // 随机挑选粒子作为彩灯
+        function pickLights() {
+            currentLights = [];
+            for(let i=0; i<lightCount; i++){
+                const randomIdx = Math.floor(Math.random() * treeParticles);
+                currentLights.push(randomIdx);
+            }
+        }
+
+        // 切换彩灯颜色
+        function toggleLights() {
+            const colorArray = treeGeometry.attributes.color.array;
+            // 先还原上一轮彩灯的原始颜色
+            currentLights.forEach(idx => {
+                colorArray[idx*3] = originalColors[idx][0];
+                colorArray[idx*3+1] = originalColors[idx][1];
+                colorArray[idx*3+2] = originalColors[idx][2];
+            });
+            // 挑选新一轮彩灯并设置颜色
+            pickLights();
+            currentLights.forEach(idx => {
+                const randomColor = lightColors[Math.floor(Math.random() * lightColors.length)];
+                colorArray[idx*3] = randomColor[0];
+                colorArray[idx*3+1] = randomColor[1];
+                colorArray[idx*3+2] = randomColor[2];
+            });
+            treeGeometry.attributes.color.needsUpdate = true;
+        }
+
+        // 初始挑选彩灯
+        pickLights();
+        // 每隔500ms切换一次彩灯
+        setInterval(toggleLights, 500);
+
+        // 相机视角
+        camera.position.set(0, 1, 7.5);
+        camera.lookAt(0, 0, 0);
+
+        // 动画循环
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // 圣诞树旋转
+            tree.rotation.y += 0.001;
+            star.rotation.x += 0.003;
+
+            // 雪花飘落更新
+            const snowPositions = snow.geometry.attributes.position.array;
+            const snowVelocities = snow.geometry.attributes.velocity.array;
+            for (let i = 0; i < snowCount * 3; i += 3) {
+                snowPositions[i] += snowVelocities[i];
+                snowPositions[i + 1] += snowVelocities[i + 1];
+                snowPositions[i + 2] += snowVelocities[i + 2];
+
+                if (snowPositions[i + 1] < -4) {
+                    snowPositions[i] = (Math.random() - 0.5) * 15;
+                    snowPositions[i + 1] = Math.random() * 8 + 2;
+                    snowPositions[i + 2] = (Math.random() - 0.5) * 15;
+                }
+            }
+            snow.geometry.attributes.position.needsUpdate = true; 
+
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        // 屏幕适配
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>
